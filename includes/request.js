@@ -22,23 +22,34 @@ const userAgent = 'couchbackup-cloudant/' + pkg.version + ' (Node.js ' +
       process.version + ')';
 
 module.exports = {
-  client: function(url, parallelism) {
+  client: function(url, opts) {
     var protocol = (url.match(/^https/)) ? https : http;
     const keepAliveAgent = new protocol.Agent({
       keepAlive: true,
       keepAliveMsecs: 30000,
-      maxSockets: parallelism
+      maxSockets: opts.parallelism
     });
     // Split the URL for use with nodejs-cloudant
     var actUrl = url.substr(0, url.lastIndexOf('/'));
     var dbName = url.substr(url.lastIndexOf('/') + 1);
-    // Default set of plugins
+    // Default set of plugins includes retry
     var pluginsToUse = ['retry'];
+    // Default to cookieauth unless an IAM key is provided
+    if (opts.iamApiKey) {
+      const iamPluginConfig = {iamApiKey: opts.iamApiKey};
+      if (opts.iamTokenEndpoint) {
+        iamPluginConfig.iamTokenEndpoint = opts.iamTokenEndpoint;
+      }
+      pluginsToUse.push({iamauth: iamPluginConfig});
+    } else {
+      pluginsToUse.push('cookieauth');
+    }
     return cloudant({url: actUrl,
       plugins: pluginsToUse,
       requestDefaults: {
         agent: keepAliveAgent,
         headers: {'User-Agent': userAgent},
-        gzip: true}}).use(dbName);
+        gzip: true
+      }}).use(dbName);
   }
 };
